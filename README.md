@@ -95,7 +95,8 @@ answers, and pings the URL only when all of that is true. On healthchecks.io set
 | `--host`, `--ns`, `--mbox` | | Seed name, nameserver name, contact email (needed with `--dns-bind`). |
 | `--snapshot` | `lionseed.snapshot` | Crawl state kept between runs. |
 | `--dump` | `lionseed.dump` | Dump for makeseeds.py and census tools, rewritten every 15 minutes. |
-| `--direct-workers` / `--proxied-workers` | 128 / 32 | Concurrent clearnet / Tor+I2P crawls. |
+| `--direct-workers` | 128 | Concurrent clearnet crawls. |
+| `--tor-workers` / `--i2p-workers` | 8 / 16 | Concurrent onion / I2P crawls. Keep Tor low: each onion connection costs tor several circuits, and too many at once overload it. |
 | `--onion-proxy` / `--i2p-proxy` | 127.0.0.1:9050 / 127.0.0.1:4447 | `none` skips that network. |
 | `--fork-retry-mins` | 15 | How often fork nodes are re-checked. |
 | `--max-nodes` | 200000 | Cap on tracked addresses. Over it, addresses that never answered are dropped, most failed first. |
