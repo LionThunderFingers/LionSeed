@@ -106,10 +106,17 @@ answers, and pings the URL only when all of that is true. On healthchecks.io set
 Seed operators are trusted with a new node's first view of the network. Follow the Knots policy:
 https://github.com/bitcoinknots/bitcoin/blob/29.x-knots/doc/dnsseed-policy.md
 
-In short: hand out a fair selection of working nodes (LionSeed does not filter by implementation or
-user agent), keep TTLs at 60 seconds or more, do not keep or share query logs, keep the host patched
-and used for nothing else, do not sell or hand over the seed, and read the contact address you
-publish. Pick a hosting provider other seed operators do not already use.
+In short, the policy asks you to: follow good host security practice and keep control of the seed
+(do not sell or hand it over), hand out a fair selection of working nodes (LionSeed does not filter
+by implementation or user agent), keep TTLs at 60 seconds or more, only log DNS queries as far as
+running the service needs and never share them (LionSeed does not log them at all), and publish a
+contact address you actually read. Publishing your crawl data is allowed, and documenting how you
+run the seed is encouraged.
+
+Some advice beyond the policy: keep the host patched and do not run other public services on it,
+since whoever controls the host controls what new nodes are told about the network. If you want to
+publish the dump, push it somewhere else (a static site works) rather than serving it from the
+seed. And pick a hosting provider other seed operators do not already use.
 
 ## Development
 
