@@ -49,7 +49,7 @@ struct Args {
     #[arg(long, default_value_t = 24)]
     nonfork_retry_hours: u64,
     /// Upper bound on addresses kept
-    #[arg(long, default_value_t = 300_000)]
+    #[arg(long, default_value_t = 200_000)]
     max_nodes: usize,
     /// Seconds between stats lines
     #[arg(long, default_value_t = 60)]

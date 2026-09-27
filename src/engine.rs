@@ -58,7 +58,7 @@ impl Default for EngineConfig {
             direct_workers: 128,
             proxied_workers: 32,
             getaddr_interval_secs: 24 * 3600,
-            max_nodes: 300_000,
+            max_nodes: 200_000,
             allow_unroutable: false,
             snapshot_path: None,
             snapshot_every: Duration::from_secs(300),
