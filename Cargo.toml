@@ -1,0 +1,10 @@
+[package]
+name = "lionseed"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A DNS seeder for the Bitcoin Knots BLAKE2b network"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
