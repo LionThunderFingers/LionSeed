@@ -6,6 +6,12 @@
 //! them and its snapshot on disk).
 
 pub mod addr;
+pub mod crawl;
+pub mod dns;
+pub mod dump;
+pub mod engine;
 pub mod node;
 pub mod scheduler;
+pub mod socks;
 pub mod store;
+pub mod wire;
