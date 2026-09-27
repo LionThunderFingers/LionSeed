@@ -3,11 +3,11 @@
 //! Workers pull work: a free worker asks for the next due address in its pool and gets one or is told
 //! when to ask again. Nothing loops looking for work, so there is nothing to spin.
 //!
-//! Each pool (direct, or through the Tor/I2P proxy) has one due-time queue per tier, and tiers are
+//! Each pool (direct, through tor, or through i2pd) has one due-time queue per tier, and tiers are
 //! served strictly in priority order: fork nodes first, then never-tried addresses, then failed
 //! unknowns due a retry, then non-fork nodes.
 
-use crate::addr::NetAddr;
+use crate::addr::{Net, NetAddr};
 use crate::node::{Class, NodeRecord};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -15,15 +15,18 @@ use std::collections::{BinaryHeap, HashMap};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pool {
     Direct,
-    Proxied,
+    /// Through the local tor. Kept apart from I2P so each network gets its own concurrency limit:
+    /// every onion connection costs tor several circuits, and too many at once overload it.
+    Tor,
+    I2p,
 }
 
 impl Pool {
     pub fn for_addr(addr: &NetAddr) -> Pool {
-        if addr.net().is_proxied() {
-            Pool::Proxied
-        } else {
-            Pool::Direct
+        match addr.net() {
+            Net::Onion => Pool::Tor,
+            Net::I2p => Pool::I2p,
+            _ => Pool::Direct,
         }
     }
 }
@@ -235,7 +238,8 @@ mod tests {
         s.schedule(a("1.1.1.1:8333"), Tier::NewUnknown, 0);
         assert_eq!(s.next(Pool::Direct, 1), Next::Crawl(a("1.1.1.1:8333")));
         assert_eq!(s.next(Pool::Direct, 1), Next::Idle);
-        assert_eq!(s.next(Pool::Proxied, 1), Next::Crawl(a(ONION)));
+        assert_eq!(s.next(Pool::I2p, 1), Next::Idle);
+        assert_eq!(s.next(Pool::Tor, 1), Next::Crawl(a(ONION)));
     }
 
     #[test]

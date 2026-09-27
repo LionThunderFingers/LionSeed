@@ -30,9 +30,12 @@ struct Args {
     /// Concurrent direct (IPv4/IPv6/CJDNS) crawls
     #[arg(long, default_value_t = 128)]
     direct_workers: usize,
-    /// Concurrent Tor/I2P crawls
-    #[arg(long, default_value_t = 32)]
-    proxied_workers: usize,
+    /// Concurrent onion crawls through tor (each costs tor several circuits; keep this small)
+    #[arg(long, default_value_t = 8)]
+    tor_workers: usize,
+    /// Concurrent I2P crawls through i2pd
+    #[arg(long, default_value_t = 16)]
+    i2p_workers: usize,
     /// Tor SOCKS proxy; "none" to skip onion addresses
     #[arg(long, default_value = "127.0.0.1:9050")]
     onion_proxy: String,
@@ -182,7 +185,8 @@ async fn main() {
             max_silence_secs: 3600,
         },
         direct_workers: args.direct_workers,
-        proxied_workers: args.proxied_workers,
+        tor_workers: args.tor_workers,
+        i2p_workers: args.i2p_workers,
         max_nodes: args.max_nodes,
         snapshot_path: Some(args.snapshot.clone()),
         ..EngineConfig::default()

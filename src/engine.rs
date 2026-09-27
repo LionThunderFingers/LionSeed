@@ -8,7 +8,7 @@
 //! - Each crawl runs in its own task, so even an unexpected panic inside it becomes an ordinary
 //!   failed attempt for that address and the worker carries on.
 
-use crate::addr::NetAddr;
+use crate::addr::{Net, NetAddr};
 use crate::crawl::{self, CrawlConfig, Outcome};
 use crate::node::{ChainRules, Class};
 use crate::scheduler::{due_for, Next, Pool, RetryPolicy, Scheduler, Tier};
@@ -32,7 +32,10 @@ pub struct EngineConfig {
     pub policy: RetryPolicy,
     pub rules: ChainRules,
     pub direct_workers: usize,
-    pub proxied_workers: usize,
+    /// Concurrent onion crawls. Each one costs tor several circuits; tor allows 32 pending by
+    /// default, and 32 onion crawls at once kept it permanently overloaded.
+    pub tor_workers: usize,
+    pub i2p_workers: usize,
     /// Ask a node for addresses at most this often.
     pub getaddr_interval_secs: u64,
     /// Upper bound on the address table.
@@ -56,7 +59,8 @@ impl Default for EngineConfig {
                 max_silence_secs: 3600,
             },
             direct_workers: 128,
-            proxied_workers: 32,
+            tor_workers: 8,
+            i2p_workers: 16,
             getaddr_interval_secs: 24 * 3600,
             max_nodes: 200_000,
             allow_unroutable: false,
@@ -127,16 +131,21 @@ impl Engine {
     /// Run until `shutdown` becomes true. Spawns the worker pools and the snapshot task.
     pub async fn run(&self, shutdown: watch::Receiver<bool>) {
         let mut handles = Vec::new();
+        let tor = if self.cfg.crawl.onion_proxy.is_some() {
+            self.cfg.tor_workers
+        } else {
+            0
+        };
+        let i2p = if self.cfg.crawl.i2p_proxy.is_some() {
+            self.cfg.i2p_workers
+        } else {
+            0
+        };
         for (pool, n) in [
             (Pool::Direct, self.cfg.direct_workers),
-            (Pool::Proxied, self.cfg.proxied_workers),
+            (Pool::Tor, tor),
+            (Pool::I2p, i2p),
         ] {
-            if pool == Pool::Proxied
-                && self.cfg.crawl.onion_proxy.is_none()
-                && self.cfg.crawl.i2p_proxy.is_none()
-            {
-                continue;
-            }
             for _ in 0..n {
                 let e = self.clone();
                 let sd = shutdown.clone();
@@ -327,6 +336,7 @@ impl Engine {
         let now = unix_now();
         let st = lock(&self.state);
         let (mut unknown, mut nonfork, mut fork, mut good, mut fork_fresh) = (0, 0, 0, 0, 0);
+        let (mut good_onion, mut good_i2p) = (0, 0);
         for (a, n) in st.store.iter() {
             match n.class {
                 Class::Unknown => unknown += 1,
@@ -340,15 +350,21 @@ impl Engine {
             }
             if n.is_good(a, &self.cfg.rules, now) {
                 good += 1;
+                match a.net() {
+                    Net::Onion => good_onion += 1,
+                    Net::I2p => good_i2p += 1,
+                    _ => {}
+                }
             }
         }
         format!(
             "nodes={} unknown={unknown} nonfork={nonfork} fork={fork} fork_checked_on_time={fork_fresh} good={good} \
-             queued={} inflight_direct={} inflight_proxied={} attempts={} successes={} new_from_gossip={} panics={}",
+             good_onion={good_onion} good_i2p={good_i2p} queued={} inflight_direct={} inflight_tor={} inflight_i2p={} attempts={} successes={} new_from_gossip={} panics={}",
             st.store.len(),
             st.sched.queued(),
             st.sched.in_flight(Pool::Direct),
-            st.sched.in_flight(Pool::Proxied),
+            st.sched.in_flight(Pool::Tor),
+            st.sched.in_flight(Pool::I2p),
             self.counters.attempts.load(Ordering::Relaxed),
             self.counters.successes.load(Ordering::Relaxed),
             self.counters.gossip_new.load(Ordering::Relaxed),
