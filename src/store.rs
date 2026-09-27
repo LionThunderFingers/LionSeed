@@ -9,7 +9,7 @@ use crate::node::{Class, NodeRecord};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufReader, Write};
 use std::path::Path;
 
 const MAGIC: [u8; 4] = *b"LSNP";
@@ -20,6 +20,26 @@ struct Snapshot {
     magic: [u8; 4],
     version: u32,
     nodes: Vec<(NetAddr, NodeRecord)>,
+}
+
+/// The same layout as `Snapshot`, borrowing instead of owning, so encoding needs no copy of the
+/// table (serde encodes references exactly like the values they point to).
+#[derive(Serialize)]
+struct SnapshotRef<'a> {
+    magic: [u8; 4],
+    version: u32,
+    nodes: Vec<(&'a NetAddr, &'a NodeRecord)>,
+}
+
+/// Write already-encoded snapshot bytes atomically: temporary file, flush to disk, rename.
+pub fn write_snapshot(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let tmp = path.with_extension("snapshot.tmp");
+    {
+        let mut f = File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    fs::rename(&tmp, path)
 }
 
 #[derive(Clone, Default)]
@@ -92,26 +112,20 @@ impl Store {
         dropped
     }
 
-    /// Write the snapshot atomically: temporary file, flush to disk, rename.
+    /// Encode the snapshot into bytes without copying the table. Cheap enough to do under the
+    /// engine's lock; the file write then happens outside it.
+    pub fn encode(&self) -> io::Result<Vec<u8>> {
+        let snap = SnapshotRef {
+            magic: MAGIC,
+            version: FORMAT_VERSION,
+            nodes: self.nodes.iter().collect(),
+        };
+        bincode::serialize(&snap).map_err(io::Error::other)
+    }
+
+    /// Encode and write the snapshot atomically.
     pub fn save(&self, path: &Path) -> io::Result<()> {
-        let tmp = path.with_extension("snapshot.tmp");
-        {
-            let file = File::create(&tmp)?;
-            let mut w = BufWriter::new(file);
-            let snap = Snapshot {
-                magic: MAGIC,
-                version: FORMAT_VERSION,
-                nodes: self
-                    .nodes
-                    .iter()
-                    .map(|(a, n)| (a.clone(), n.clone()))
-                    .collect(),
-            };
-            bincode::serialize_into(&mut w, &snap).map_err(io::Error::other)?;
-            w.flush()?;
-            w.get_ref().sync_all()?;
-        }
-        fs::rename(&tmp, path)
+        write_snapshot(path, &self.encode()?)
     }
 
     /// Load a snapshot. A missing file is an empty store; a damaged or foreign file is an error the
