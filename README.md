@@ -10,6 +10,13 @@ to build the fixed seed list, including Tor and I2P nodes.
 It is a new program written for this network, not a patch to an older seeder. Its design draws on
 lessons from Pieter Wuille's bitcoin-seeder and Ava Chow's dnsseedrs; no code from either is used.
 
+## Running live
+
+LionSeed runs `seed.thelionpool.org`:
+
+- How that seed is operated: https://lionthunderfingers.github.io/B2B-Node-census/seed/
+- A census of the BLAKE2b network built from its crawl data: https://lionthunderfingers.github.io/B2B-Node-census/
+
 ## What it does
 
 - **Serves only proven fork nodes.** A node counts as BLAKE2b only if its own VERSION handshake
@@ -22,7 +29,8 @@ lessons from Pieter Wuille's bitcoin-seeder and Ava Chow's dnsseedrs; no code fr
   day.
 - **Crawls clearnet, Tor v3 and I2P** (the last two through a local tor or i2pd).
 - **Stays small.** State lives in memory and is saved to disk every 5 minutes with an atomic rename.
-  On a live crawl of about 200k addresses it used under 1% of a CPU core and under 100 MB of memory.
+  On a live crawl of about 200k addresses across clearnet, Tor and I2P it uses about 2% of a CPU
+  core and around 200 MB of memory. The address table is capped (`--max-nodes`).
 - **Standard DNS.** A, AAAA, NS and SOA for the seed name and `x<hex>` service-flag names such as
   `x10000009`, over UDP and TCP, with per-source rate limiting. One answer per /16 (or /32 for
   IPv6) so answers are spread across networks.
@@ -90,6 +98,7 @@ answers, and pings the URL only when all of that is true. On healthchecks.io set
 | `--direct-workers` / `--proxied-workers` | 128 / 32 | Concurrent clearnet / Tor+I2P crawls. |
 | `--onion-proxy` / `--i2p-proxy` | 127.0.0.1:9050 / 127.0.0.1:4447 | `none` skips that network. |
 | `--fork-retry-mins` | 15 | How often fork nodes are re-checked. |
+| `--max-nodes` | 200000 | Cap on tracked addresses. Over it, addresses that never answered are dropped, most failed first. |
 | `--seed` / `--bootstrap-dns` | the two existing BLAKE2b seeds | Where a fresh crawl starts. |
 
 ## Running it responsibly
