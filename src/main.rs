@@ -28,10 +28,10 @@ struct Args {
     #[arg(long = "bootstrap-dns")]
     bootstrap_dns: Vec<String>,
     /// Concurrent direct (IPv4/IPv6/CJDNS) crawls
-    #[arg(long, default_value_t = 64)]
+    #[arg(long, default_value_t = 128)]
     direct_workers: usize,
     /// Concurrent Tor/I2P crawls
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, default_value_t = 32)]
     proxied_workers: usize,
     /// Tor SOCKS proxy; "none" to skip onion addresses
     #[arg(long, default_value = "127.0.0.1:9050")]
@@ -49,7 +49,7 @@ struct Args {
     #[arg(long, default_value_t = 24)]
     nonfork_retry_hours: u64,
     /// Upper bound on addresses kept
-    #[arg(long, default_value_t = 400_000)]
+    #[arg(long, default_value_t = 300_000)]
     max_nodes: usize,
     /// Seconds between stats lines
     #[arg(long, default_value_t = 60)]
