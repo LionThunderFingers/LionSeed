@@ -71,7 +71,17 @@ fi
 ONION_PROXY=none
 I2P_PROXY=none
 [ "${WITH_TOR:-0}" = 1 ] && ONION_PROXY=127.0.0.1:9050 && systemctl enable --now tor >/dev/null 2>&1 || true
-[ "${WITH_I2P:-0}" = 1 ] && I2P_PROXY=127.0.0.1:4447 && systemctl enable --now i2pd >/dev/null 2>&1 || true
+if [ "${WITH_I2P:-0}" = 1 ]; then
+    I2P_PROXY=127.0.0.1:4447
+    # A seed only needs outbound I2P connections. Do not relay other people's tunnels: that is what
+    # makes i2pd grow in memory and bandwidth.
+    if ! grep -qE '^[[:space:]]*notransit[[:space:]]*=[[:space:]]*true' /etc/i2pd/i2pd.conf; then
+        sed -i 's/^[#[:space:]]*notransit[[:space:]]*=.*/notransit = true/' /etc/i2pd/i2pd.conf
+        grep -qE '^notransit = true' /etc/i2pd/i2pd.conf || sed -i '1i notransit = true' /etc/i2pd/i2pd.conf
+    fi
+    systemctl enable i2pd >/dev/null 2>&1 || true
+    systemctl restart i2pd >/dev/null 2>&1 || true
+fi
 
 log "writing /etc/systemd/system/lionseed.service"
 cat > /etc/systemd/system/lionseed.service <<UNIT
