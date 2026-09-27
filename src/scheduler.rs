@@ -147,6 +147,11 @@ impl Scheduler {
         }
     }
 
+    /// Drop any queued entry for `addr` (it was pruned from the store).
+    pub fn forget(&mut self, addr: &NetAddr) {
+        self.live.remove(addr);
+    }
+
     /// The worker is done with `addr`. The caller reschedules it from its updated record.
     pub fn finished(&mut self, addr: &NetAddr) {
         self.in_flight.remove(addr);

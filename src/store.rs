@@ -22,7 +22,7 @@ struct Snapshot {
     nodes: Vec<(NetAddr, NodeRecord)>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Store {
     nodes: HashMap<NetAddr, NodeRecord>,
 }
@@ -55,7 +55,13 @@ impl Store {
     /// Learn about `addr` from gossip. Returns true if it is new. Unroutable addresses are refused.
     /// A known address is left alone: gossip never overwrites what a handshake established.
     pub fn add_gossip(&mut self, addr: NetAddr, services: u64, now: u64) -> bool {
-        if !addr.is_routable() || self.nodes.contains_key(&addr) {
+        self.add(addr, services, now, false)
+    }
+
+    /// As `add_gossip`, optionally accepting unroutable addresses (operator-given seed nodes on a
+    /// private network, and tests on loopback).
+    pub fn add(&mut self, addr: NetAddr, services: u64, now: u64, allow_unroutable: bool) -> bool {
+        if (!allow_unroutable && !addr.is_routable()) || self.nodes.contains_key(&addr) {
             return false;
         }
         self.nodes
