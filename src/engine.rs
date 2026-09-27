@@ -256,23 +256,30 @@ impl Engine {
         }
     }
 
-    /// Prune if over the cap, then write the snapshot off the async workers.
+    /// Prune if over the cap, encode the snapshot under the lock (no copy of the table), then write
+    /// it to disk off the async workers.
     pub async fn snapshot_now(&self) {
-        let copy = {
+        let bytes = {
             let mut st = lock(&self.state);
             let dropped = st.store.prune(self.cfg.max_nodes);
             for a in &dropped {
                 st.sched.forget(a);
             }
-            st.store.clone()
-        };
-        if let Some(path) = self.cfg.snapshot_path.clone() {
-            let res = tokio::task::spawn_blocking(move || copy.save(&path)).await;
-            match res {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => eprintln!("snapshot: write failed: {e}"),
-                Err(e) => eprintln!("snapshot: task failed: {e}"),
+            if self.cfg.snapshot_path.is_none() {
+                return;
             }
+            st.store.encode()
+        };
+        let (Some(path), Ok(bytes)) = (self.cfg.snapshot_path.clone(), bytes) else {
+            eprintln!("snapshot: encoding failed");
+            return;
+        };
+        let res =
+            tokio::task::spawn_blocking(move || crate::store::write_snapshot(&path, &bytes)).await;
+        match res {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("snapshot: write failed: {e}"),
+            Err(e) => eprintln!("snapshot: task failed: {e}"),
         }
     }
 
