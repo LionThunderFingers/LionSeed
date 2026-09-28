@@ -1,17 +1,32 @@
 //! The seeder dump: one line per address that has been tried, in the text format of sipa's
 //! bitcoin-seeder `dnsseed.dump`, which Knots' `contrib/seeds/makeseeds.py` and the census scripts
 //! read. Written to a temporary file and renamed, so readers never see half a dump.
+//!
+//! The uptime columns count time before LionSeed knew of a node as downtime: each window's figure is
+//! scaled by how much of that window has passed since the node was first seen. Without that, a node
+//! seen for one day would show 100% over 30 days, far above what other seeders report for the same
+//! node, and makeseeds.py's uptime filter (50% over 30 days) would stop meaning anything.
 
 use crate::addr::NetAddr;
-use crate::node::{ChainRules, NodeRecord};
+use crate::node::{ChainRules, NodeRecord, WINDOWS};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
 pub const HEADER: &str = "# address                                        good  lastSuccess    %(2h)   %(8h)   %(1d)   %(7d)  %(30d)  blocks      svcs  version";
 
+/// Reliability per window as the dump reports it: scaled by the share of the window observed.
+pub fn reported_uptime(n: &NodeRecord, now: u64) -> [f64; 5] {
+    let observed = now.saturating_sub(n.first_seen) as f64;
+    let mut out = n.reliability;
+    for (r, window) in out.iter_mut().zip(WINDOWS) {
+        *r *= 1.0 - (-observed / window as f64).exp();
+    }
+    out
+}
+
 pub fn line(addr: &NetAddr, n: &NodeRecord, rules: &ChainRules, now: u64) -> String {
-    let [r2h, r8h, r1d, r1w, r1m] = n.reliability;
+    let [r2h, r8h, r1d, r1w, r1m] = reported_uptime(n, now);
     let ua: String = n
         .user_agent
         .chars()
@@ -104,6 +119,23 @@ mod tests {
         );
         assert_eq!(f[10], "70016");
         assert_eq!(f[11], "\"/Satoshi:29.4.2/Knots:20260508/\"");
+    }
+
+    #[test]
+    fn uptime_counts_time_before_the_node_was_known_as_down() {
+        let mut n = NodeRecord::from_gossip(0, 0);
+        n.reliability = [1.0; 5];
+        let day = 86400;
+        let [r2h, _, _, _, r30d] = reported_uptime(&n, day);
+        assert!(r2h > 0.99, "a full day covers the 2h window: {r2h}");
+        assert!(
+            (r30d - (1.0 - (-1.0f64 / 30.0).exp())).abs() < 1e-9,
+            "{r30d}"
+        );
+        assert!(r30d < 0.05, "one day is not 50% of 30 days");
+        let [.., r30d] = reported_uptime(&n, 60 * day);
+        assert!(r30d > 0.85, "two months covers it: {r30d}");
+        assert_eq!(reported_uptime(&n, 0), [0.0; 5], "nothing observed yet");
     }
 
     #[test]
