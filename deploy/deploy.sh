@@ -131,7 +131,8 @@ systemctl enable lionseed >/dev/null 2>&1
 if [ -n "${HEALTHCHECK_PING_URL:-}" ]; then
     log "installing the health check timer"
     install -m 0600 /dev/null /etc/default/lionseed-healthcheck
-    printf 'PING_URL=%s\nSEED_HOST=%s\nBIND_IP=%s\n' "$HEALTHCHECK_PING_URL" "$SEED_HOST" "$PUBLIC_IP" > /etc/default/lionseed-healthcheck
+    printf 'PING_URL=%s\nSEED_HOST=%s\nBIND_IP=%s\nCHECK_ONION=%s\nCHECK_I2P=%s\n' "$HEALTHCHECK_PING_URL" \
+        "$SEED_HOST" "$PUBLIC_IP" "${WITH_TOR:-0}" "${WITH_I2P:-0}" > /etc/default/lionseed-healthcheck
     cat > /etc/systemd/system/lionseed-healthcheck.service <<UNIT
 [Unit]
 Description=LionSeed health check

@@ -4,6 +4,8 @@
 #
 # Environment (from /etc/default/lionseed-healthcheck): PING_URL, SEED_HOST, BIND_IP,
 # optional DUMP (default /var/lib/lionseed/lionseed.dump) and MAX_DUMP_AGE (default 3600 s).
+# CHECK_ONION=1 / CHECK_I2P=1 also require at least one good onion / I2P node, so a stalled tor or
+# i2pd raises the alarm too (a node is only good if it answered within the last hour).
 
 set -uo pipefail
 DUMP="${DUMP:-/var/lib/lionseed/lionseed.dump}"
@@ -17,6 +19,14 @@ if [ -f "$DUMP" ]; then
     [ "$age" -le "$MAX_DUMP_AGE" ] || problems+=("dump is ${age}s old (limit ${MAX_DUMP_AGE}s)")
     good=$(awk 'NR>1 && $2==1' "$DUMP" | wc -l)
     [ "$good" -gt 0 ] || problems+=("no good nodes in the dump")
+    if [ "${CHECK_ONION:-0}" = 1 ]; then
+        n=$(awk 'NR>1 && $2==1 && $1 ~ /\.onion:/' "$DUMP" | wc -l)
+        [ "$n" -gt 0 ] || problems+=("no good onion nodes (is tor working?)")
+    fi
+    if [ "${CHECK_I2P:-0}" = 1 ]; then
+        n=$(awk 'NR>1 && $2==1 && $1 ~ /\.i2p:/' "$DUMP" | wc -l)
+        [ "$n" -gt 0 ] || problems+=("no good I2P nodes (is i2pd working?)")
+    fi
 else
     problems+=("no dump at $DUMP")
 fi

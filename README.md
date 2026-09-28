@@ -81,8 +81,9 @@ first.
 ## Monitoring
 
 With `HEALTHCHECK_PING_URL=https://hc-ping.com/<uuid>` set, the deploy script installs a timer that
-checks every 5 minutes that the service is running, the dump is recent, it has good nodes, and DNS
-answers, and pings the URL only when all of that is true. On healthchecks.io set the period to
+checks every 5 minutes that the service is running, the dump is recent, it has good nodes (and good
+onion and I2P nodes, when those are enabled), and DNS answers, and pings the URL only when all of
+that is true. On healthchecks.io set the period to
 5 minutes and the grace to 15. The check never restarts or repairs anything.
 
 ## Options
