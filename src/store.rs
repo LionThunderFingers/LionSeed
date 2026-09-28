@@ -60,6 +60,10 @@ impl Store {
         self.nodes.is_empty()
     }
 
+    pub fn contains(&self, addr: &NetAddr) -> bool {
+        self.nodes.contains_key(addr)
+    }
+
     pub fn get(&self, addr: &NetAddr) -> Option<&NodeRecord> {
         self.nodes.get(addr)
     }
