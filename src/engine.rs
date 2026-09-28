@@ -10,7 +10,8 @@
 
 use crate::addr::{Net, NetAddr};
 use crate::crawl::{self, CrawlConfig, Outcome};
-use crate::node::{ChainRules, Class};
+use crate::node::{ChainRules, Class, NODE_BLAKE2B};
+use crate::recent::RecentlyDropped;
 use crate::scheduler::{due_for, Next, Pool, RetryPolicy, Scheduler, Tier};
 use crate::store::Store;
 use std::path::PathBuf;
@@ -74,6 +75,36 @@ impl Default for EngineConfig {
 pub struct State {
     pub store: Store,
     pub sched: Scheduler,
+    /// Addresses pruned recently, kept out of the table until their retry would have been due.
+    pub dropped: RecentlyDropped,
+}
+
+impl State {
+    /// Take in one gossiped address. Returns true if it was new and is now queued. An address
+    /// pruned recently is refused unless its gossip advertises NODE_BLAKE2B: gossiped bits never
+    /// make a node count as fork, but they are a good enough reason to look at it again.
+    fn admit_gossip(
+        &mut self,
+        addr: NetAddr,
+        services: u64,
+        now: u64,
+        allow_unroutable: bool,
+    ) -> Result<bool, ()> {
+        if services & NODE_BLAKE2B == 0
+            && !self.store.contains(&addr)
+            && self.dropped.contains(&addr, now)
+        {
+            return Err(());
+        }
+        if self
+            .store
+            .add(addr.clone(), services, now, allow_unroutable)
+        {
+            self.sched.schedule(addr, Tier::NewUnknown, 0);
+            return Ok(true);
+        }
+        Ok(false)
+    }
 }
 
 /// Counters for the stats line, cheap to update from any task.
@@ -83,6 +114,8 @@ pub struct Counters {
     pub successes: AtomicU64,
     pub panics: AtomicU64,
     pub gossip_new: AtomicU64,
+    /// Gossiped addresses refused because they were pruned recently.
+    pub gossip_refused: AtomicU64,
 }
 
 #[derive(Clone)]
@@ -111,7 +144,11 @@ impl Engine {
             }
         }
         Engine {
-            state: Arc::new(Mutex::new(State { store, sched })),
+            state: Arc::new(Mutex::new(State {
+                store,
+                sched,
+                dropped: RecentlyDropped::new(cfg.policy.unknown_retry_secs, unix_now()),
+            })),
             cfg: Arc::new(cfg),
             counters: Arc::new(Counters::default()),
         }
@@ -220,7 +257,7 @@ impl Engine {
     fn apply(&self, addr: NetAddr, outcome: Outcome, start: u64) {
         let now = unix_now();
         let mut st = lock(&self.state);
-        let State { store, sched } = &mut *st;
+        let State { store, sched, .. } = &mut *st;
         sched.finished(&addr);
         let mut new_addrs = Vec::new();
         {
@@ -246,11 +283,17 @@ impl Engine {
             sched.schedule(addr, tier, due);
         }
         for (a, services) in new_addrs {
-            if crawl::reachable(a.net(), &self.cfg.crawl)
-                && store.add(a.clone(), services, now, self.cfg.allow_unroutable)
-            {
-                self.counters.gossip_new.fetch_add(1, Ordering::Relaxed);
-                sched.schedule(a, Tier::NewUnknown, 0);
+            if !crawl::reachable(a.net(), &self.cfg.crawl) {
+                continue;
+            }
+            match st.admit_gossip(a, services, now, self.cfg.allow_unroutable) {
+                Ok(true) => {
+                    self.counters.gossip_new.fetch_add(1, Ordering::Relaxed);
+                }
+                Ok(false) => {}
+                Err(()) => {
+                    self.counters.gossip_refused.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
     }
@@ -271,8 +314,10 @@ impl Engine {
         let bytes = {
             let mut st = lock(&self.state);
             let dropped = st.store.prune(self.cfg.max_nodes);
+            let now = unix_now();
             for a in &dropped {
                 st.sched.forget(a);
+                st.dropped.insert(a, now);
             }
             if self.cfg.snapshot_path.is_none() {
                 return;
@@ -359,7 +404,7 @@ impl Engine {
         }
         format!(
             "nodes={} unknown={unknown} nonfork={nonfork} fork={fork} fork_checked_on_time={fork_fresh} good={good} \
-             good_onion={good_onion} good_i2p={good_i2p} queued={} inflight_direct={} inflight_tor={} inflight_i2p={} attempts={} successes={} new_from_gossip={} panics={}",
+             good_onion={good_onion} good_i2p={good_i2p} queued={} inflight_direct={} inflight_tor={} inflight_i2p={} attempts={} successes={} new_from_gossip={} gossip_refused={} panics={}",
             st.store.len(),
             st.sched.queued(),
             st.sched.in_flight(Pool::Direct),
@@ -368,7 +413,61 @@ impl Engine {
             self.counters.attempts.load(Ordering::Relaxed),
             self.counters.successes.load(Ordering::Relaxed),
             self.counters.gossip_new.load(Ordering::Relaxed),
+            self.counters.gossip_refused.load(Ordering::Relaxed),
             self.counters.panics.load(Ordering::Relaxed),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state() -> State {
+        State {
+            store: Store::new(),
+            sched: Scheduler::new(),
+            dropped: RecentlyDropped::new(6 * 3600, 1000),
+        }
+    }
+
+    #[test]
+    fn pruned_addresses_are_not_readmitted_by_plain_gossip() {
+        let mut st = state();
+        let dead: NetAddr = "1.2.3.4:8333".parse().unwrap();
+        let fresh: NetAddr = "5.6.7.8:8333".parse().unwrap();
+        st.dropped.insert(&dead, 1000);
+
+        assert_eq!(st.admit_gossip(dead.clone(), 0x9, 1001, false), Err(()));
+        assert!(!st.store.contains(&dead));
+        assert_eq!(st.admit_gossip(fresh.clone(), 0x9, 1001, false), Ok(true));
+        assert_eq!(
+            st.admit_gossip(fresh, 0x9, 1002, false),
+            Ok(false),
+            "already known"
+        );
+    }
+
+    #[test]
+    fn gossip_claiming_the_fork_bit_gets_a_pruned_address_another_look() {
+        let mut st = state();
+        let a: NetAddr = "1.2.3.4:8333".parse().unwrap();
+        st.dropped.insert(&a, 1000);
+        assert_eq!(
+            st.admit_gossip(a.clone(), 0x9 | NODE_BLAKE2B, 1001, false),
+            Ok(true)
+        );
+        assert_eq!(st.sched.next(Pool::Direct, 1001), Next::Crawl(a));
+    }
+
+    #[test]
+    fn pruned_addresses_come_back_after_the_retry_interval() {
+        let mut st = state();
+        let a: NetAddr = "1.2.3.4:8333".parse().unwrap();
+        st.dropped.insert(&a, 1000);
+        assert_eq!(
+            st.admit_gossip(a, 0x9, 1000 + 12 * 3600 + 1, false),
+            Ok(true)
+        );
     }
 }
