@@ -86,7 +86,7 @@ fi
 log "writing /etc/systemd/system/lionseed.service"
 cat > /etc/systemd/system/lionseed.service <<UNIT
 [Unit]
-Description=LionSeed DNS seeder for the Bitcoin Knots BLAKE2b network
+Description=LionSeed DNS seeder for the Bitcoin network
 After=network-online.target
 Wants=network-online.target
 

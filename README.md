@@ -1,9 +1,9 @@
 # LionSeed
 
-A DNS seeder for the Bitcoin Knots BLAKE2b network.
+A DNS seeder for the Bitcoin network.
 
 A new node asks a few DNS seeds for addresses before it knows any peers. LionSeed crawls the
-network, keeps track of which nodes are really on the BLAKE2b fork and reliably up, and answers
+network, keeps track of which nodes are really on the fork and reliably up, and answers
 those DNS queries with them. It also writes a dump that Knots' `contrib/seeds/makeseeds.py` can use
 to build the fixed seed list, including Tor and I2P nodes.
 
@@ -14,12 +14,12 @@ lessons from Pieter Wuille's bitcoin-seeder and Ava Chow's dnsseedrs; no code fr
 
 LionSeed runs `seed.thelionpool.org`:
 
-- How that seed is operated: https://lionthunderfingers.github.io/B2B-Node-census/seed/
-- A census of the BLAKE2b network built from its crawl data: https://lionthunderfingers.github.io/B2B-Node-census/
+- How that seed is operated: https://lionthunderfingers.github.io/Bitcoin-Node-census/seed/
+- A census of the network built from its crawl data: https://lionthunderfingers.github.io/Bitcoin-Node-census/
 
 ## What it does
 
-- **Serves only proven fork nodes.** A node counts as BLAKE2b only if its own VERSION handshake
+- **Serves only proven fork nodes.** A node counts as on the fork only if its own VERSION handshake
   advertised the BLAKE2b service bit (bit 28) and a height past the fork. Bits claimed in address
   gossip never count. User agents are never looked at.
 - **Keeps answers fresh.** Fork nodes are re-checked every 15 minutes, and a node that has not
@@ -101,7 +101,7 @@ that is true. On healthchecks.io set the period to
 | `--onion-proxy` / `--i2p-proxy` | 127.0.0.1:9050 / 127.0.0.1:4447 | `none` skips that network. |
 | `--fork-retry-mins` | 15 | How often fork nodes are re-checked. |
 | `--max-nodes` | 200000 | Cap on tracked addresses. Over it, addresses that never answered are dropped, most failed first. |
-| `--seed` / `--bootstrap-dns` | the two existing BLAKE2b seeds | Where a fresh crawl starts. |
+| `--seed` / `--bootstrap-dns` | the two existing fork-serving seeds | Where a fresh crawl starts. |
 
 ## Running it responsibly
 
