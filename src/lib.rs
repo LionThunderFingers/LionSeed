@@ -1,4 +1,4 @@
-//! LionSeed: a DNS seeder for the Bitcoin Knots BLAKE2b network.
+//! LionSeed: a DNS seeder for the Bitcoin network.
 //!
 //! The crate is split so the parts that decide what gets served can be tested without a network:
 //! `addr` (addresses on every network we crawl), `node` (what we know about one address and whether

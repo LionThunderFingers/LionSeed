@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 #[derive(Parser, Debug)]
-#[command(version, about = "A DNS seeder for the Bitcoin Knots BLAKE2b network")]
+#[command(version, about = "A DNS seeder for the Bitcoin network")]
 struct Args {
     /// Network: main or testnet4
     #[arg(long, default_value = "main")]

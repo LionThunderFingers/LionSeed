@@ -3,7 +3,7 @@ name = "lionseed"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "A DNS seeder for the Bitcoin Knots BLAKE2b network"
+description = "A DNS seeder for the Bitcoin network"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
